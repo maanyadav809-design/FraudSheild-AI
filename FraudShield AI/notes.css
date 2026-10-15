@@ -1,0 +1,84 @@
+/*You are  going to build a system which contains a website and you have to connect into python train an AI model and make the entire application work
+
+Feature one -> AI transaction analyser 
+Feature two -> Interactive Analytics dashboard 
+Feature three -> Suspicious transaction explorer
+
+Tech stack ->HTNL , CSS , Javascript , Python , Pandas+numpy , scikit-learn , Flask , matplotlib
+
+Project work flow - User > (html css java script),enters the transaction, click on analyse button >htt[ post request(flask api),
+recieve the input data > train ML model,processes features,predict risk >(Jason response),prediction,probaility > results on the web
+
+AP request types: [api helps in communication between frontend and backend]
+1. get request - backend to frontend
+2. post request - frontend to backend
+
+Floder structure - Fraud sheet AI - libraries to install for the backend, flask, pandas,numpy,scikit learn,joblib,matplotlib
+also install the dependencies via terminal "python -m venv" 
+
+all the above are the external python packages we have to install like -
+pip install -r requirements.txt
+
+following terms are will be used to train the model -
+a. data set
+b.featires(X)- amount , hour , device, failed attempts and other inputs
+c. target(Y) - 0 means legitimet and 1 means fraud
+d. training data - transaction used to learn patterns
+e. test data - accepted transactions used to evaluate the train model 
+f. model - a mathematical system that learns relationship between features and target
+   
+MODEL TRAINING ---->
+step 1 - load and clean the data
+step 2 - seprate inputs and outputs [X = df(features) , y = df(fraud)] 
+step 3 - split the data into training and test sets [train_test_split(X,Y,test_size=0.20,random_state=42)]
+step 4 - 
+step 5 -
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+*/
