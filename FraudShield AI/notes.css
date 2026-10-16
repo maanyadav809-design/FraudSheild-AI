@@ -34,7 +34,9 @@ step 3 - split the data into training and test sets [train_test_split(X,Y,test_s
 step 4 - 
 step 5 -
 
-
+Logistic regrestion for binary classification - you do not need to derive mathematical calculation the logistic 
+algorithm recieves historical trasition features. It learns neumerical parameters that relates those features to the fraud lable.
+It estimates a score that can be interprated as a probability by the model. A decision threshol converts that score into a predicted class.
 
 
 
