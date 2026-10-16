@@ -1,23 +1,22 @@
 /**
  * ==========================================================================
  * FRAUDSHIELD AI // CLIENT ENGINE & INTERACTIVE TELEMETRY CONTROLLER
- * Robotic + Futuristic Defense Console Logic
- * Includes:
- * 1. Web Audio API Cyber Synthesizer (Zero asset dependencies)
- * 2. Canvas Neural Particle Grid Animation
- * 3. Statistical Heuristic Engine (Z-Score, Bayes Rule, IQR Outlier)
- * 4. Radar Scan State Machine & SVG Radial Gauge
+ * Hybrid Mode:
+ * 1. Connects to Python Flask Backend (/api/analyze) for real Logistic Regression ML
+ * 2. Graceful offline fallback to statistical heuristics (Z-score + Bayes)
+ * 3. Web Audio API Cyber Synthesizer
+ * 4. Canvas Neural Particle Grid
  * 5. Event Stream Terminal Logging & JSON Exporter
  * ==========================================================================
  */
 
-// Dataset Statistical Constants (derived from payment_fraud_dataset.csv)
+// Dataset Statistical Constants (derived from AI_Fraud_Detection_Transactions.csv)
 const STATS_BASELINE = {
-    amountMean: 2104.35,
+    amountMean: 1191.195,
     amountStd: 1328.70,
     amountQ1: 1045.0,
     amountQ3: 2890.0,
-    baseFraudRate: 0.0382 // 3.82% base probability
+    baseFraudRate: 0.0178 // 1.78% base probability from training dataset
 };
 
 // Global State
@@ -25,7 +24,8 @@ const state = {
     audioEnabled: true,
     isScanning: false,
     activeRiskScore: 4.2,
-    audioCtx: null
+    audioCtx: null,
+    backendOnline: false
 };
 
 // ==========================================================================
@@ -80,9 +80,9 @@ function playCyberSound(type) {
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
             osc.type = 'sine';
-            osc.frequency.setValueAtTime(523.25, now); // C5
-            osc.frequency.setValueAtTime(659.25, now + 0.08); // E5
-            osc.frequency.setValueAtTime(783.99, now + 0.16); // G5
+            osc.frequency.setValueAtTime(523.25, now);
+            osc.frequency.setValueAtTime(659.25, now + 0.08);
+            osc.frequency.setValueAtTime(783.99, now + 0.16);
             gain.gain.setValueAtTime(0.08, now);
             gain.gain.linearRampToValueAtTime(0.001, now + 0.35);
             osc.connect(gain);
@@ -139,7 +139,6 @@ function initNeuralCanvas() {
     function render() {
         ctx.clearRect(0, 0, width, height);
 
-        // Draw connections
         ctx.lineWidth = 0.5;
         for (let i = 0; i < particles.length; i++) {
             for (let j = i + 1; j < particles.length; j++) {
@@ -158,7 +157,6 @@ function initNeuralCanvas() {
             }
         }
 
-        // Draw and update particles
         for (let i = 0; i < particles.length; i++) {
             const p = particles[i];
             p.x += p.vx;
@@ -217,30 +215,22 @@ function showToast(message) {
 }
 
 // ==========================================================================
-// 4. STATISTICAL & HEURISTIC INFERENCE ENGINE
+// 4. STATISTICAL & HEURISTIC FALLBACK ENGINE
 // ==========================================================================
 function computeInferenceMetrics(data) {
     const { amount, hour, failedAttempts, newDevice, locationChanged, accountAge, previousTxns } = data;
 
-    // 1. Z-Score calculation
     const zScore = (amount - STATS_BASELINE.amountMean) / STATS_BASELINE.amountStd;
-
-    // 2. Outlier check (IQR based)
     const iqr = STATS_BASELINE.amountQ3 - STATS_BASELINE.amountQ1;
     const isOutlier = amount > STATS_BASELINE.amountQ3 + 1.5 * iqr;
 
-    // 3. Hour risk: 01:00 to 05:00 is prime midnight risk
     const isMidnightRisk = hour >= 1 && hour <= 5;
     const hourRiskMult = isMidnightRisk ? 2.8 : hour >= 23 || hour === 0 ? 1.6 : 1.0;
-
-    // 4. Failed attempts weight
     const authRiskScore = Math.min(failedAttempts * 18, 50);
 
-    // 5. Bayes rule probability estimate P(Fraud | Evidence)
     let prior = STATS_BASELINE.baseFraudRate;
     let odds = prior / (1 - prior);
 
-    // Likelihood ratios based on training statistics
     if (newDevice) odds *= 4.5;
     if (locationChanged) odds *= 3.8;
     if (failedAttempts >= 2) odds *= Math.pow(2.8, failedAttempts - 1);
@@ -251,17 +241,14 @@ function computeInferenceMetrics(data) {
     if (previousTxns === 0) odds *= 1.9;
 
     let bayesProb = odds / (1 + odds);
-    bayesProb = Math.min(Math.max(bayesProb, 0.012), 0.985); // clamp
+    bayesProb = Math.min(Math.max(bayesProb, 0.012), 0.985);
 
-    // 6. Overall Composite Risk Percentage (0 - 100)
     let compositeScore = bayesProb * 100;
-
-    // Build explainable AI attribution factor list
     const riskFactors = [];
 
     if (failedAttempts >= 2) {
         riskFactors.push({
-            name: `Credential Brute-Force (${failedAttempts} Failed Attempts)`,
+            name: `Failed Attempts Spike (${failedAttempts} Retries)`,
             weight: Math.min(failedAttempts * 12, 35),
             color: 'crimson'
         });
@@ -323,7 +310,6 @@ function computeInferenceMetrics(data) {
         });
     }
 
-    // Baseline nominal factor if safe
     if (riskFactors.length === 0) {
         riskFactors.push({
             name: 'Historical Velocity & Behavior Consistency',
@@ -350,9 +336,7 @@ function updateResultsUI(metrics, formData) {
     const { compositeScore, zScore, isOutlier, hourRiskMult, bayesProb, riskFactors } = metrics;
     state.activeRiskScore = compositeScore;
 
-    // 1. Elements
     const verdictBanner = document.getElementById('verdict-banner');
-    const verdictIconBox = document.getElementById('verdict-icon-box');
     const verdictIcon = document.getElementById('verdict-icon');
     const verdictTitle = document.getElementById('verdict-title');
     const verdictDesc = document.getElementById('verdict-desc');
@@ -369,7 +353,6 @@ function updateResultsUI(metrics, formData) {
     const riskFactorsCount = document.getElementById('risk-factors-count');
     const recommendationText = document.getElementById('recommendation-text');
 
-    // 2. Risk Classification: Safe (<30%), Warning (30-65%), Danger (>65%)
     let category = 'safe';
     let bannerTitle = 'CLEARED // TRANSACTION AUTHORIZED';
     let bannerDesc = 'Transaction parameters match expected baseline profile. No threat indicators triggered.';
@@ -397,14 +380,12 @@ function updateResultsUI(metrics, formData) {
         playCyberSound('safe');
     }
 
-    // Set banner classes
     verdictBanner.className = `verdict-banner ${category}`;
     verdictTitle.textContent = bannerTitle;
     verdictDesc.textContent = bannerDesc;
     verdictBadge.textContent = badgeText;
     gaugeRiskLevel.textContent = gaugeLevel;
 
-    // Update Icon
     if (category === 'danger') {
         verdictIcon.className = 'fa-solid fa-triangle-exclamation';
     } else if (category === 'warning') {
@@ -413,8 +394,6 @@ function updateResultsUI(metrics, formData) {
         verdictIcon.className = 'fa-solid fa-shield-check';
     }
 
-    // 3. Radial SVG Gauge Animation
-    // Total circumference for r=75 is 2 * PI * 75 ≈ 471.2
     const totalCircumference = 471.2;
     const progressOffset = totalCircumference - (totalCircumference * (compositeScore / 100));
     gaugeFillCircle.style.strokeDasharray = totalCircumference;
@@ -423,7 +402,6 @@ function updateResultsUI(metrics, formData) {
     gaugeFillCircle.style.filter = `drop-shadow(0 0 8px ${strokeColor})`;
     gaugePercentage.textContent = `${compositeScore.toFixed(1)}%`;
 
-    // 4. Statistical Metrics Breakdown
     const sign = zScore >= 0 ? '+' : '';
     metricZScore.textContent = `${sign}${zScore.toFixed(2)}σ (${zScore > 2.5 ? 'Extreme Outlier' : zScore > 1.2 ? 'Moderate' : 'Normal'})`;
     metricZScore.className = `s-val ${zScore > 2.5 ? 'text-crimson' : zScore > 1.2 ? 'text-amber' : 'text-cyan'}`;
@@ -440,7 +418,6 @@ function updateResultsUI(metrics, formData) {
     metricAuthPenalty.textContent = `${formData.failedAttempts} failed retries`;
     metricAuthPenalty.className = `s-val ${formData.failedAttempts >= 2 ? 'text-crimson' : 'text-emerald'}`;
 
-    // 5. Attribution Factor Bars
     attributionBars.innerHTML = '';
     riskFactorsCount.textContent = `${riskFactors.length} Factor${riskFactors.length > 1 ? 's' : ''} Identified`;
 
@@ -464,7 +441,6 @@ function updateResultsUI(metrics, formData) {
         attributionBars.appendChild(item);
     });
 
-    // 6. Recommendation Card Text
     if (category === 'danger') {
         recommendationText.innerHTML = `
             <strong class="text-crimson">AUTOMATED QUARANTINE TRIGGERED:</strong> Block transaction immediately. Hold recipient settlement and flag device fingerprint (${formData.newDevice ? 'Unrecognized HW' : 'Known HW'}). Dispatch security notification to registered mobile.
@@ -479,9 +455,112 @@ function updateResultsUI(metrics, formData) {
         `;
     }
 
-    // 7. Log to terminal
     logTerminal(
         `Inference completed for ${formData.txId}: Risk=${compositeScore.toFixed(1)}% | Verdict=${badgeText} | Bayes=${bayesProb.toFixed(3)}`,
+        category === 'danger' ? 'danger' : category === 'warning' ? 'warn' : 'success'
+    );
+}
+
+// Update UI directly from Flask Logistic Regression response
+function updateResultsFromBackend(res, formData) {
+    const compositeScore = res.risk_score_percent;
+    state.activeRiskScore = compositeScore;
+
+    const verdictBanner = document.getElementById('verdict-banner');
+    const verdictIcon = document.getElementById('verdict-icon');
+    const verdictTitle = document.getElementById('verdict-title');
+    const verdictDesc = document.getElementById('verdict-desc');
+    const verdictBadge = document.getElementById('verdict-badge');
+    const gaugeRiskLevel = document.getElementById('gauge-risk-level');
+    const gaugeFillCircle = document.getElementById('gauge-fill-circle');
+    const gaugePercentage = document.getElementById('gauge-percentage');
+    const metricZScore = document.getElementById('metric-zscore');
+    const metricBayes = document.getElementById('metric-bayes');
+    const metricOutlier = document.getElementById('metric-outlier');
+    const metricHourRisk = document.getElementById('metric-hour-risk');
+    const metricAuthPenalty = document.getElementById('metric-auth-penalty');
+    const attributionBars = document.getElementById('attribution-bars');
+    const riskFactorsCount = document.getElementById('risk-factors-count');
+    const recommendationText = document.getElementById('recommendation-text');
+
+    let category = 'safe';
+    let strokeColor = '#10b981';
+
+    if (compositeScore >= 65 || res.prediction === 1) {
+        category = 'danger';
+        strokeColor = '#ff0055';
+        playCyberSound('danger');
+    } else if (compositeScore >= 30) {
+        category = 'warning';
+        strokeColor = '#f59e0b';
+        playCyberSound('scan');
+    } else {
+        playCyberSound('safe');
+    }
+
+    verdictBanner.className = `verdict-banner ${category}`;
+    verdictTitle.textContent = res.verdict_title;
+    verdictDesc.textContent = res.verdict_description;
+    verdictBadge.textContent = res.verdict_badge;
+    gaugeRiskLevel.textContent = res.risk_level;
+
+    if (category === 'danger') {
+        verdictIcon.className = 'fa-solid fa-triangle-exclamation';
+    } else if (category === 'warning') {
+        verdictIcon.className = 'fa-solid fa-shield-virus';
+    } else {
+        verdictIcon.className = 'fa-solid fa-shield-check';
+    }
+
+    const totalCircumference = 471.2;
+    const progressOffset = totalCircumference - (totalCircumference * (compositeScore / 100));
+    gaugeFillCircle.style.strokeDasharray = totalCircumference;
+    gaugeFillCircle.style.strokeDashoffset = progressOffset;
+    gaugeFillCircle.style.stroke = strokeColor;
+    gaugeFillCircle.style.filter = `drop-shadow(0 0 8px ${strokeColor})`;
+    gaugePercentage.textContent = `${compositeScore.toFixed(1)}%`;
+
+    const zScore = (formData.amount - STATS_BASELINE.amountMean) / STATS_BASELINE.amountStd;
+    const sign = zScore >= 0 ? '+' : '';
+    metricZScore.textContent = `${sign}${zScore.toFixed(2)}σ (LR Scaled)`;
+    metricZScore.className = `s-val ${zScore > 2.5 ? 'text-crimson' : 'text-cyan'}`;
+
+    metricBayes.textContent = res.fraud_probability.toFixed(4);
+    metricBayes.className = `s-val ${res.fraud_probability > 0.5 ? 'text-crimson' : 'text-emerald'}`;
+
+    metricOutlier.textContent = res.prediction === 1 ? 'Positive Fraud Class (1)' : 'Legitimate Class (0)';
+    metricOutlier.className = `s-val ${res.prediction === 1 ? 'text-crimson' : 'text-emerald'}`;
+
+    metricHourRisk.textContent = `${formData.hour}:00 hrs (${formData.hour <= 5 && formData.hour >= 1 ? 'High Risk' : 'Standard'})`;
+    metricHourRisk.className = `s-val ${formData.hour <= 5 && formData.hour >= 1 ? 'text-crimson' : 'text-cyan'}`;
+
+    metricAuthPenalty.textContent = `${formData.failedAttempts} failed retries`;
+    metricAuthPenalty.className = `s-val ${formData.failedAttempts >= 2 ? 'text-crimson' : 'text-emerald'}`;
+
+    attributionBars.innerHTML = '';
+    const atts = res.feature_attributions || [];
+    riskFactorsCount.textContent = `${atts.length} Model Weight${atts.length > 1 ? 's' : ''}`;
+
+    atts.forEach(att => {
+        const item = document.createElement('div');
+        item.className = 'att-factor-card';
+        const colorHex = att.direction === 'danger' ? '#ff0055' : '#10b981';
+        item.innerHTML = `
+            <div class="att-factor-meta">
+                <span style="color: ${colorHex}">${att.feature} (Logistic Coef Weight)</span>
+                <span class="weight" style="color: ${colorHex}">${att.impact > 0 ? '+' : ''}${att.impact}</span>
+            </div>
+            <div class="att-progress-track">
+                <div class="att-progress-fill" style="width: ${att.weight_pct}%; background: ${colorHex}; box-shadow: 0 0 6px ${colorHex}"></div>
+            </div>
+        `;
+        attributionBars.appendChild(item);
+    });
+
+    recommendationText.innerHTML = res.recommendation;
+
+    logTerminal(
+        `[LOGISTIC REGRESSION] Predicted for ${formData.txId}: Risk=${compositeScore.toFixed(1)}% | Class=${res.prediction} (${res.verdict_badge})`,
         category === 'danger' ? 'danger' : category === 'warning' ? 'warn' : 'success'
     );
 }
@@ -503,7 +582,6 @@ function executeScan(formData) {
     const analyzeBtn = document.getElementById('btn-analyze');
     const analyzeBtnText = document.getElementById('analyze-btn-text');
 
-    // UI State: Scanning
     resultsDisplay.style.opacity = '0.2';
     scanningHud.classList.remove('hidden');
     analyzeBtn.disabled = true;
@@ -511,12 +589,11 @@ function executeScan(formData) {
 
     logTerminal(`Ingesting vector ${formData.txId}: Amount=₹${formData.amount}, Hour=${formData.hour}:00...`, 'info');
 
-    // Phased scan animation
     const phases = [
-        { progress: '25%', title: 'PARSING TELEMETRY VECTOR...', console: 'Normalizing input tensors against 8,014 training points...' },
-        { progress: '55%', title: 'EVALUATING Z-SCORE & OUTLIERS...', console: 'Testing IQR 1.5x bounds and standard deviations...' },
-        { progress: '85%', title: 'COMPUTING BAYES PROBABILITY...', console: 'Calculating P(Fraud | Device, FailedAttempts, Geolocation)...' },
-        { progress: '100%', title: 'SYNTHESIZING VERDICT...', console: 'Generating neural weight attribution and policy action...' }
+        { progress: '25%', title: 'PARSING TELEMETRY VECTOR...', console: 'Normalizing input tensors against 8,012 training points...' },
+        { progress: '55%', title: 'EVALUATING LOGISTIC REGRESSION WEIGHTS...', console: 'StandardScaler pipeline active. Fitting coefficients...' },
+        { progress: '85%', title: 'COMPUTING SIGMOID PROBABILITY...', console: 'P(Fraud | X) = 1 / (1 + e^-(w^T x + b))...' },
+        { progress: '100%', title: 'SYNTHESIZING VERDICT...', console: 'Classifying binary fraud threshold and XAI weights...' }
     ];
 
     let currentPhase = 0;
@@ -528,17 +605,54 @@ function executeScan(formData) {
             currentPhase++;
         } else {
             clearInterval(interval);
-            setTimeout(() => {
-                // Done scanning
+
+            // Send payload to Python Flask Backend
+            const backendPayload = {
+                transaction_id: formData.txId,
+                amount: formData.amount,
+                transaction_hour: formData.hour,
+                customer_age: formData.customerAge,
+                previous_transactions: formData.previousTxns,
+                failed_attempts: formData.failedAttempts,
+                new_device: formData.newDevice ? 1 : 0,
+                location_changed: formData.locationChanged ? 1 : 0,
+                account_age_days: formData.accountAge
+            };
+
+            fetch('/predict', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(backendPayload)
+            })
+            .then(res => {
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                return res.json();
+            })
+            .then(data => {
                 scanningHud.classList.add('hidden');
                 resultsDisplay.style.opacity = '1';
                 analyzeBtn.disabled = false;
                 analyzeBtnText.textContent = 'INITIATE AI NEURAL SCAN';
                 state.isScanning = false;
 
+                if (data.status === 'success') {
+                    updateResultsFromBackend(data, formData);
+                } else {
+                    throw new Error(data.message || 'Model prediction failed');
+                }
+            })
+            .catch(err => {
+                // Offline fallback (e.g., Netlify static deployment)
+                scanningHud.classList.add('hidden');
+                resultsDisplay.style.opacity = '1';
+                analyzeBtn.disabled = false;
+                analyzeBtnText.textContent = 'INITIATE AI NEURAL SCAN';
+                state.isScanning = false;
+
+                logTerminal(`Flask backend offline (${err.message}). Using client statistical heuristic.`, 'warn');
                 const metrics = computeInferenceMetrics(formData);
                 updateResultsUI(metrics, formData);
-            }, 300);
+            });
         }
     }, 280);
 }
@@ -594,10 +708,27 @@ function generateRandomTxnId() {
 // 8. EVENT LISTENERS INITIALIZATION
 // ==========================================================================
 document.addEventListener('DOMContentLoaded', () => {
-    // 1. Start Canvas Particles
     initNeuralCanvas();
 
-    // 2. Audio Toggle
+    // Check Flask backend health
+    fetch('/api/health')
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'online') {
+                state.backendOnline = true;
+                const statusLabel = document.querySelector('.status-label');
+                if (statusLabel) statusLabel.textContent = 'PYTHON AI BACKEND: ONLINE';
+                const bannerText = document.querySelector('.banner-scroll .banner-text');
+                if (bannerText) {
+                    bannerText.innerHTML = '<strong class="text-emerald">PYTHON AI BACKEND ACTIVE:</strong> Connected to live Logistic Regression model (models/fraud_model.joblib). Full ML inference operational.';
+                }
+                logTerminal(`[ONLINE] Connected to Python Flask ML Backend (Accuracy=${(data.metrics.accuracy * 100).toFixed(1)}%)`, 'success');
+            }
+        })
+        .catch(() => {
+            logTerminal('[INFO] Flask server not detected. Running client-side simulation. Run `python app.py` for live backend.', 'info');
+        });
+
     const audioBtn = document.getElementById('audio-toggle-btn');
     const audioIcon = document.getElementById('audio-icon');
     audioBtn.addEventListener('click', () => {
@@ -612,13 +743,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // 3. Hour Slider Listener
     const hourSlider = document.getElementById('tx-hour');
     hourSlider.addEventListener('input', (e) => {
         updateHourDisplay(parseInt(e.target.value, 10));
     });
 
-    // 4. Regenerate Transaction ID
     document.getElementById('btn-regen-id').addEventListener('click', () => {
         const newId = generateRandomTxnId();
         document.getElementById('tx-id').value = newId;
@@ -626,7 +755,6 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast(`Generated ID: ${newId}`);
     });
 
-    // 5. Preset Buttons
     document.getElementById('preset-safe').addEventListener('click', () => {
         populateForm({
             name: 'Normal Daytime Grocery',
@@ -659,13 +787,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Exact Challenge from Statistics Student Project Task!
+    // Exact Challenge from Student Project Task!
     document.getElementById('preset-attack').addEventListener('click', () => {
         populateForm({
             name: '₹52,000 Midnight Attack (Student Project Challenge)',
             txId: 'TXN-FINAL-52K',
             amount: 52000.00,
-            hour: 3, // 03:12 AM
+            hour: 3,
             customerAge: 26,
             accountAge: 45,
             previousTxns: 0,
@@ -701,7 +829,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // 6. Form Submit -> Trigger Analysis
     const fraudForm = document.getElementById('fraud-form');
     fraudForm.addEventListener('submit', (e) => {
         e.preventDefault();
@@ -722,17 +849,14 @@ document.addEventListener('DOMContentLoaded', () => {
         executeScan(formData);
     });
 
-    // 7. Reset Form
     document.getElementById('btn-reset').addEventListener('click', () => {
         document.getElementById('preset-safe').click();
         showToast('Form reset to default baseline');
     });
 
-    // 8. Refresh HUD Telemetry
     document.getElementById('btn-refresh-stats').addEventListener('click', () => {
         playCyberSound('click');
         const scanned = document.getElementById('stat-scanned');
-        const threats = document.getElementById('stat-threats');
         const latency = document.getElementById('stat-latency');
         const navLat = document.getElementById('nav-latency');
 
@@ -748,11 +872,11 @@ document.addEventListener('DOMContentLoaded', () => {
         logTerminal(`Telemetry heartbeat refreshed. Network latency: ${newLat}ms`, 'system');
     });
 
-    // 9. Copy JSON Report
     document.getElementById('btn-copy-report').addEventListener('click', () => {
         playCyberSound('click');
         const report = {
             system: 'FraudShield AI v2.4 Sentinel',
+            model: 'Logistic Regression Classifier',
             timestamp: new Date().toISOString(),
             transaction_id: document.getElementById('tx-id').value,
             amount: parseFloat(document.getElementById('tx-amount').value),
@@ -769,7 +893,6 @@ document.addEventListener('DOMContentLoaded', () => {
             .catch(() => showToast('Could not copy to clipboard'));
     });
 
-    // 10. Mitigation Actions
     document.getElementById('btn-quarantine').addEventListener('click', () => {
         playCyberSound('danger');
         showToast('Protocol Enforced: Account token revoked & quarantined');
@@ -788,13 +911,11 @@ document.addEventListener('DOMContentLoaded', () => {
         logTerminal(`[ACTION] Manual override authorized by ENG // DEV-01`, 'success');
     });
 
-    // 11. Clear Terminal
     document.getElementById('btn-clear-term').addEventListener('click', () => {
         const body = document.getElementById('terminal-body');
         body.innerHTML = '<div class="term-line system">[SYSTEM] Terminal buffer cleared. Stream monitoring active.</div>';
     });
 
-    // Run baseline initial scan on startup
     setTimeout(() => {
         const initialData = {
             txId: 'TXN-80912',
