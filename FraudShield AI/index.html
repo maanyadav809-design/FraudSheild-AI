@@ -11,7 +11,7 @@
     <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <!-- Stylesheet -->
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="/static/style.css" onerror="this.onerror=null;this.href='style.css';">
 </head>
 <body class="cyber-theme">
     <!-- Background Canvas for Interactive Neural Cyber Grid -->
@@ -43,6 +43,7 @@
                 <a href="#dashboard" class="nav-item active"><i class="fa-solid fa-chart-line"></i> Dashboard</a>
                 <a href="#analyzer" class="nav-item"><i class="fa-solid fa-microchip"></i> Neural Ingestion</a>
                 <a href="#results" class="nav-item"><i class="fa-solid fa-radar"></i> Threat Radar</a>
+                <a href="#explorer" class="nav-item"><i class="fa-solid fa-list-check"></i> Anomaly Explorer</a>
                 <a href="#terminal" class="nav-item"><i class="fa-solid fa-terminal"></i> Telemetry Logs</a>
             </nav>
 
@@ -88,6 +89,9 @@
                     </div>
                     <div class="section-actions">
                         <span class="live-badge"><span class="pulsing-dot"></span> LIVE STREAMING</span>
+                        <button class="cyber-btn-sm" id="btn-view-chart" title="Render Matplotlib Boxplot from Dataset">
+                            <i class="fa-solid fa-chart-simple"></i> Matplotlib Boxplot
+                        </button>
                         <button class="cyber-btn-sm" id="btn-refresh-stats">
                             <i class="fa-solid fa-arrows-rotate"></i> Sync Core
                         </button>
@@ -543,6 +547,77 @@
                 </section>
             </div>
 
+            <!-- FEATURE THREE: SUSPICIOUS TRANSACTION EXPLORER (notes.css) -->
+            <section class="explorer-section" id="explorer">
+                <div class="explorer-panel">
+                    <div class="panel-header">
+                        <div class="panel-title-group">
+                            <div class="panel-icon"><i class="fa-solid fa-database"></i></div>
+                            <div>
+                                <h3 class="panel-heading">FEATURE THREE // SUSPICIOUS TRANSACTION EXPLORER</h3>
+                                <p class="panel-caption">Query, filter, and inspect anomalous dataset records with statistical Z-scores</p>
+                            </div>
+                        </div>
+                        <div class="explorer-controls">
+                            <div class="filter-btn-group">
+                                <button type="button" class="filter-btn danger active" id="filter-fraud" data-filter="fraud">
+                                    <i class="fa-solid fa-triangle-exclamation"></i> Confirmed Fraud
+                                </button>
+                                <button type="button" class="filter-btn" id="filter-high-risk" data-filter="high_risk">
+                                    <i class="fa-solid fa-bolt"></i> High Anomaly (Z > 2.5σ)
+                                </button>
+                                <button type="button" class="filter-btn" id="filter-all" data-filter="all">
+                                    <i class="fa-solid fa-layer-group"></i> All Records
+                                </button>
+                            </div>
+                            <div class="search-box">
+                                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                                <input type="text" id="explorer-search" class="search-input" placeholder="Search TXN ID (e.g. T00006)...">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="explorer-table-wrap">
+                        <table class="cyber-table">
+                            <thead>
+                                <tr>
+                                    <th>TXN ID</th>
+                                    <th>AMOUNT (₹)</th>
+                                    <th>HOUR</th>
+                                    <th>AGE</th>
+                                    <th>FAILED RETRIES</th>
+                                    <th>NEW DEV</th>
+                                    <th>GEO HOP</th>
+                                    <th>Z-SCORE</th>
+                                    <th>STATUS</th>
+                                    <th>ACTION</th>
+                                </tr>
+                            </thead>
+                            <tbody id="explorer-table-body">
+                                <tr>
+                                    <td colspan="10" style="text-align:center; padding: 2rem; color: #64748b;">
+                                        <i class="fa-solid fa-spinner fa-spin"></i> Loading transactions from Python backend...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- MATPLOTLIB CHART MODAL (Feature 2) -->
+            <div id="chart-modal" class="chart-modal-backdrop">
+                <div class="chart-modal-card">
+                    <div class="chart-modal-header">
+                        <div class="chart-modal-title"><i class="fa-solid fa-chart-column"></i> DATASET DISTRIBUTION // MATPLOTLIB BOXPLOT</div>
+                        <button type="button" class="chart-close-btn" id="btn-close-chart"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <div class="chart-modal-body">
+                        <img id="chart-modal-img" class="chart-img" src="/api/chart/distribution" alt="Matplotlib Distribution Boxplot">
+                    </div>
+                </div>
+            </div>
+
             <!-- TERMINAL & TELEMETRY STREAM LOGS -->
             <section class="cyber-terminal-section" id="terminal">
                 <div class="terminal-window">
@@ -593,6 +668,6 @@
     </div>
 
     <!-- JavaScript -->
-    <script src="script.js"></script>
+    <script src="/static/script.js" onerror="this.onerror=null;this.src='script.js';"></script>
 </body>
 </html>

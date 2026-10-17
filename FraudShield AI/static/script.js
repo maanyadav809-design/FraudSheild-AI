@@ -916,6 +916,137 @@ document.addEventListener('DOMContentLoaded', () => {
         body.innerHTML = '<div class="term-line system">[SYSTEM] Terminal buffer cleared. Stream monitoring active.</div>';
     });
 
+    // ======================================================================
+    // FEATURE TWO: LOAD ANALYTICS DASHBOARD DATA (notes.css)
+    // ======================================================================
+    function loadAnalyticsData() {
+        fetch('/api/analytics')
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const ds = data.dataset_summary;
+                    const statScanned = document.getElementById('stat-scanned');
+                    const statThreats = document.getElementById('stat-threats');
+                    if (statScanned) statScanned.textContent = ds.total_transactions.toLocaleString();
+                    if (statThreats) statThreats.textContent = ds.fraudulent_count.toLocaleString();
+                    logTerminal(`[ANALYTICS] Dataset ingested: ${ds.total_transactions} txns, ${ds.fraudulent_count} fraud (${ds.fraud_rate_percent}%)`, 'info');
+                }
+            })
+            .catch(() => {});
+    }
+    loadAnalyticsData();
+
+    // ======================================================================
+    // FEATURE TWO: MATPLOTLIB CHART MODAL CONTROLS (notes.css)
+    // ======================================================================
+    const chartBtn = document.getElementById('btn-view-chart');
+    const chartModal = document.getElementById('chart-modal');
+    const chartCloseBtn = document.getElementById('btn-close-chart');
+    const chartImg = document.getElementById('chart-modal-img');
+
+    if (chartBtn && chartModal) {
+        chartBtn.addEventListener('click', () => {
+            playCyberSound('click');
+            if (chartImg) chartImg.src = '/api/chart/distribution?t=' + Date.now();
+            chartModal.classList.add('active');
+            logTerminal('[CHART] Generated Matplotlib Boxplot: Fraud Status vs Amount', 'system');
+        });
+    }
+
+    if (chartCloseBtn && chartModal) {
+        chartCloseBtn.addEventListener('click', () => {
+            chartModal.classList.remove('active');
+        });
+        chartModal.addEventListener('click', (e) => {
+            if (e.target === chartModal) chartModal.classList.remove('active');
+        });
+    }
+
+    // ======================================================================
+    // FEATURE THREE: SUSPICIOUS TRANSACTION EXPLORER (notes.css)
+    // ======================================================================
+    let currentFilter = 'fraud';
+    function loadExplorerTransactions(filter = 'fraud', search = '') {
+        const tbody = document.getElementById('explorer-table-body');
+        if (!tbody) return;
+
+        fetch(`/api/transactions?filter=${encodeURIComponent(filter)}&search=${encodeURIComponent(search)}&limit=15`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.status !== 'success' || !data.transactions.length) {
+                    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:1.5rem; color:#64748b;">No transactions match query.</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = '';
+                data.transactions.forEach(tx => {
+                    const tr = document.createElement('tr');
+                    const zSign = tx.z_score >= 0 ? '+' : '';
+                    tr.innerHTML = `
+                        <td><strong>${tx.transaction_id}</strong></td>
+                        <td style="color:var(--neon-cyan)">₹${tx.amount.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                        <td>${String(tx.transaction_hour).padStart(2, '0')}:00</td>
+                        <td>${tx.customer_age}y (${tx.account_age_days}d)</td>
+                        <td style="${tx.failed_attempts >= 2 ? 'color:var(--neon-crimson);font-weight:700;' : ''}">${tx.failed_attempts}</td>
+                        <td>${tx.new_device ? '<span class="status-pill-table fraud">YES</span>' : '<span style="color:#64748b">NO</span>'}</td>
+                        <td>${tx.location_changed ? '<span class="status-pill-table fraud">YES</span>' : '<span style="color:#64748b">NO</span>'}</td>
+                        <td style="${tx.z_score > 2 ? 'color:var(--neon-crimson)' : 'color:var(--neon-cyan)'}">${zSign}${tx.z_score}σ</td>
+                        <td><span class="status-pill-table ${tx.is_fraud ? 'fraud' : 'legit'}">${tx.is_fraud ? 'FRAUD (1)' : 'LEGIT (0)'}</span></td>
+                        <td><button type="button" class="table-action-btn load-tx-btn" data-tx='${JSON.stringify(tx)}'><i class="fa-solid fa-crosshairs"></i> Load</button></td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+                document.querySelectorAll('.load-tx-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const txData = JSON.parse(e.currentTarget.getAttribute('data-tx'));
+                        populateForm({
+                            name: `Dataset TXN ${txData.transaction_id}`,
+                            txId: txData.transaction_id,
+                            amount: txData.amount,
+                            hour: txData.transaction_hour,
+                            customerAge: txData.customer_age,
+                            accountAge: txData.account_age_days,
+                            previousTxns: txData.previous_transactions,
+                            failedAttempts: txData.failed_attempts,
+                            channel: 'UPI',
+                            newDevice: Boolean(txData.new_device),
+                            locationChanged: Boolean(txData.location_changed)
+                        });
+                        window.location.hash = '#analyzer';
+                    });
+                });
+            })
+            .catch(() => {
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:1.5rem; color:#f87171;">Start Flask server via `python app.py` to explore live dataset.</td></tr>';
+            });
+    }
+
+    loadExplorerTransactions('fraud');
+
+    // Filter Buttons
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            e.currentTarget.classList.add('active');
+            currentFilter = e.currentTarget.getAttribute('data-filter');
+            const searchVal = document.getElementById('explorer-search')?.value || '';
+            loadExplorerTransactions(currentFilter, searchVal);
+            playCyberSound('click');
+        });
+    });
+
+    const searchInput = document.getElementById('explorer-search');
+    if (searchInput) {
+        let debounceTimer;
+        searchInput.addEventListener('input', (e) => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                loadExplorerTransactions(currentFilter, e.target.value);
+            }, 300);
+        });
+    }
+
     setTimeout(() => {
         const initialData = {
             txId: 'TXN-80912',
