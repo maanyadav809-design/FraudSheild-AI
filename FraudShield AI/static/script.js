@@ -619,7 +619,7 @@ function executeScan(formData) {
                 account_age_days: formData.accountAge
             };
 
-            fetch('/predict', {
+            fetch('/api/predict', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(backendPayload)
@@ -803,6 +803,26 @@ document.addEventListener('DOMContentLoaded', () => {
             locationChanged: true
         });
     });
+
+    // Step 7 Postman Test Vector from Curriculum Screenshots
+    const postmanPresetBtn = document.getElementById('preset-postman-78k');
+    if (postmanPresetBtn) {
+        postmanPresetBtn.addEventListener('click', () => {
+            populateForm({
+                name: '₹78,500 Test Vector (Step 7)',
+                txId: 'TXN-POSTMAN-78K',
+                amount: 78500.00,
+                hour: 2,
+                customerAge: 29,
+                accountAge: 80,
+                previousTxns: 1,
+                failedAttempts: 4,
+                channel: 'CREDIT_CARD',
+                newDevice: true,
+                locationChanged: true
+            });
+        });
+    }
 
     document.getElementById('preset-random').addEventListener('click', () => {
         const randAmount = Math.floor(Math.random() * 45000) + 200;
